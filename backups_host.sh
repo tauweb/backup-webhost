@@ -19,7 +19,6 @@ BK_FILES_OWNER="whiskeyman" # владелец файлов бэкапов
 # rm -rf ./*
 # cd ~/
 
-
 # Ток рут может юзать скрипт (Гарантирует доступ ко всем файлам)
 if [ "$EUID" -ne 0 ]
   then echo "Please run as root"
@@ -28,7 +27,7 @@ fi
 
 
 # Проверяет переданные аргументы в скрипт 
-# Первый аргумент - это имя пользователя БД, второй - его пароль
+# Первый аргумент - это имя пользователя БД, второй - его пароль (Можно указать по умолчанию в переменных DB_USER и DB_USER_PASSWORD)
 if [ -n "$1" ]; then
     if [[ -n "$1" && -n "$2" ]]; then
         echo "Пользователь БД: $1 с заданным паролем"
@@ -40,18 +39,18 @@ if [ -n "$1" ]; then
     fi
 else
     if [[ $DB_USER==="" ]]; then
-        echo -n "Введите имя пользователя БД > "
+        echo -n "Введите имя пользователя БД: "
         read DB_USER
 
-        echo -n "Теперь его пароль > "
+        echo -n "Теперь его пароль: "
         read -s DB_USER_PASSWORD
+        echo -e "\n"
     fi
    # echo "Юзер $DB_USER, пас $DB_USER_PASSWORD" # debug
 fi
 
 
 # Main config variables. !Не забыть бы минимализировать
-# !Подумать как реализовать резервное копирование отдельными архивами для проектов в категориях по одному
 
 # Linux bin paths, change this if it can not be autodetected via which command
 MYSQL="$(which mysql)"
@@ -82,11 +81,8 @@ IGGY="information_schema phpmyadmin"
 [ ! -d $DB_BK_DIR ] && mkdir -p $DB_BK_DIR || :
 [ ! -d $BK_FILES_DIR ] && mkdir -p $BK_FILES_DIR || :
 
-# Only root can access it!
-#$CHOWN 0.0 -R $BK_DIR
-#$CHMOD 0600 $BK_DIR
 
-#PROJ_CAT_NAME - это название файла или папки (тип проекта) в основной папке веб каталогов
+#PROJ_CAT_NAME - это название файла или папки (тип проекта / категория) в основной папке веб каталогов. У меня это: Sites, Projects, Bots, Frameworks etc.
 
 # Создает структуру папок в каталоге, куда будут создаваться бэкапы
 for PROJ_CAT_NAME in $(ls  $WWW_ROOT | grep -v /) ; do
@@ -119,11 +115,6 @@ done
 echo -e "\e[34mВыполняю бэкап директории:\e[0m" /etc"\n"
 tar czf $BK_FILES_DIR""etc.tar /etc
 
-# exit
-
-
-
-
 
 # Get all database list first
 DBS="$($MYSQL -u $DB_USER -h $HOSTNAME -p$DB_USER_PASSWORD -Bse 'show databases')"
@@ -140,22 +131,18 @@ do
     fi
 
     if [ "$skipdb" == "-1" ] ; then
-    #FILE="$DB_BK_DIR/$db.$HOST.$NOW.gz"
-    FILE="$DB_BK_DIR/$db.gz"
-    # do all inone job in pipe,
-    # connect to mysql using mysqldump for select mysql database
-    # and pipe it out to gz file in backup dir :)
+        #FILE="$DB_BK_DIR/$db.$HOST.$NOW.gz"
+        FILE="$DB_BK_DIR/$db.gz"
+        # do all inone job in pipe,
+        # connect to mysql using mysqldump for select mysql database
+        # and pipe it out to gz file in backup dir :)
         echo -e "\e[34mВыполняю бэкап БД:\e[0m "$db "\n"
         $MYSQLDUMP -u $DB_USER -h $HOSTNAME -p$DB_USER_PASSWORD $db | $GZIP -9 > $FILE
     fi
 done
 
-
-# Выполняет архивирование сайтов (Хоста в целом).
+# Выполняет архивирование сайтов (Хоста в целом). Использовать, если не нужно структурировать все.
 # tar czfv $BK_FILES_DIR/$NOW.tar.gz $WWW_ROOT
-
-# Изменяем владельца на директорию с бэкапами
-# chown $(whoami) $BK_DIR
 
 # Do remote copy via SSH                                                                                                        (Нужно дописать)
 # echo 'Капирование на удаленный хост'
@@ -166,3 +153,5 @@ echo -e "\e[32m Бэкап на \e[1m$NOW выполнен\e[0m"
 
 echo -e "\e[34mИзменение владельца папки с бэкапом ($BK_DIR) на :\e[0m "$BK_FILES_OWNER "\n"
 chown -R $BK_FILES_OWNER ./BackUps
+
+# Доделать отпраку почты, если скрипт был вызван из crontab
