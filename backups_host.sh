@@ -1,23 +1,7 @@
 #!/bin/bash
 # Shell script to backup MySql database and files
-#
-# Первый аргумент скрипту -  юзер БД
-# Второй - Пароль пользователя БД
 
-# Дефольные значения настройки БД
-DB_USER="root"              # USERNAME
-DB_USER_PASSWORD=""         # PASSWORD
-HOSTNAME="localhost"        # Hostname
-# BK_USER_DIR               # Заюзать потом. 
-# BOT_BASE_DIR="/var/www/html/Projects/Bender"
-BK_FILES_OWNER="whiskeyman" # владелец файлов бэкапов
-
-# Очистка логов бота
-# cd $BOT_BASE_DIR/Dumps/
-# rm -rf ./*
-# cd $BOT_BASE_DIR/Logs/
-# rm -rf ./*
-# cd ~/
+# Первый аргумент скрипту -  юзер БД,  Второй - Пароль пользователя БД
 
 # Ток рут может юзать скрипт (Гарантирует доступ ко всем файлам)
 if [ "$EUID" -ne 0 ]
@@ -25,6 +9,15 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
+# Дефольные значения настройки БД
+DB_USER="root"              # USERNAME
+DB_USER_PASSWORD=""         # PASSWORD
+HOSTNAME="localhost"        # Hostname
+# BK_USER_DIR               # Заюзать потом. 
+BK_FILES_OWNER="whiskeyman" # владелец файлов бэкапов
+
+# Удаление логов и дампов отладки у Телеграм бота. 
+rm -rf /var/www/html/Projects/Bender/Dumps/* && rm -rf /var/www/html/Projects/Bender/Logs/*
 
 # Проверяет переданные аргументы в скрипт 
 # Первый аргумент - это имя пользователя БД, второй - его пароль (Можно указать по умолчанию в переменных DB_USER и DB_USER_PASSWORD)
@@ -49,9 +42,7 @@ else
    # echo "Юзер $DB_USER, пас $DB_USER_PASSWORD" # debug
 fi
 
-
 # Main config variables. !Не забыть бы минимализировать
-
 # Linux bin paths, change this if it can not be autodetected via which command
 MYSQL="$(which mysql)"
 MYSQLDUMP="$(which mysqldump)"
@@ -81,13 +72,11 @@ IGGY="information_schema phpmyadmin"
 [ ! -d $DB_BK_DIR ] && mkdir -p $DB_BK_DIR || :
 [ ! -d $BK_FILES_DIR ] && mkdir -p $BK_FILES_DIR || :
 
-
-#PROJ_CAT_NAME - это название файла или папки (тип проекта / категория) в основной папке веб каталогов. У меня это: Sites, Projects, Bots, Frameworks etc.
+# PROJ_CAT_NAME - это название файла или папки (тип проекта / категория) в основной папке веб каталогов. 
+# У меня это: Sites, Orders, Tasks, Projects, Bots, Frameworks, etc.
 
 # Создает структуру папок в каталоге, куда будут создаваться бэкапы
 for PROJ_CAT_NAME in $(ls  $WWW_ROOT | grep -v /) ; do
-    # echo $PROJ_CAT_NAME # debug
-
     # Создает структуру карталога www в каталоге, в который будут помещены бэкапы
     if [[ -d $WWW_ROOT$PROJ_CAT_NAME ]]; then
         [ ! -d $BK_FILES_DIR"www/" ] && mkdir -p $BK_FILES_DIR"www"  || :
@@ -98,23 +87,24 @@ for PROJ_CAT_NAME in $(ls  $WWW_ROOT | grep -v /) ; do
         # Выполнить архивирование папки в виде: 
         # корень www + название категории проекта (просто папка из wwww) + название самого проекта / сайта / файла
         for PROJ_NAME in $( ls $WWW_ROOT$PROJ_CAT_NAME ); do
-            echo -e "\e[34mВыполняю бэкап директории:\e[0m" $WWW_ROOT$PROJ_CAT_NAME"/"${PROJ_NAME[$iterator]}"\n"
+            echo -e "\e[34mВыполняю бэкап:\e[0m" $WWW_ROOT$PROJ_CAT_NAME"/"${PROJ_NAME[$iterator]}
             tar czf $BK_FILES_DIR"www/"$PROJ_CAT_NAME"/"${PROJ_NAME[$iterator]}.tar.gz  $WWW_ROOT$PROJ_CAT_NAME"/"${PROJ_NAME[$iterator]}*
         done
 
         ((iterator++)) 
 
     else # Или же сразу создает бэкап, если это файл
-        echo -e "\e[34mВыполняю бэкап файла:\e[0m" $WWW_ROOT$PROJ_CAT_NAME"\n"
+        echo -e "\e[34mВыполняю бэкап файла:\e[0m" $WWW_ROOT$PROJ_CAT_NAME
         tar czf $BK_FILES_DIR"www/"$PROJ_CAT_NAME.tar.gz $WWW_ROOT$PROJ_CAT_NAME
     fi
-
 done
 
-# Создает бэкап /ect
-echo -e "\e[34mВыполняю бэкап директории:\e[0m" /etc"\n"
-tar czf $BK_FILES_DIR""etc.tar /etc
+# Выполняет архивирование сайтов (Хоста в целом). Использовать, если не нужно структурировать все, но тогда нужно удалить цикл выше
+# tar czfv $BK_FILES_DIR/$NOW.tar.gz $WWW_ROOT
 
+# Создает бэкап /ect
+echo -e "\e[34mВыполняю бэкап:\e[0m" /etc
+tar czf $BK_FILES_DIR""etc.tar /etc
 
 # Get all database list first
 DBS="$($MYSQL -u $DB_USER -h $HOSTNAME -p$DB_USER_PASSWORD -Bse 'show databases')"
@@ -136,13 +126,10 @@ do
         # do all inone job in pipe,
         # connect to mysql using mysqldump for select mysql database
         # and pipe it out to gz file in backup dir :)
-        echo -e "\e[34mВыполняю бэкап БД:\e[0m "$db "\n"
+        echo -e "\e[34mВыполняю бэкап БД:\e[0m "$db
         $MYSQLDUMP -u $DB_USER -h $HOSTNAME -p$DB_USER_PASSWORD $db | $GZIP -9 > $FILE
     fi
 done
-
-# Выполняет архивирование сайтов (Хоста в целом). Использовать, если не нужно структурировать все.
-# tar czfv $BK_FILES_DIR/$NOW.tar.gz $WWW_ROOT
 
 # Do remote copy via SSH                                                                                                        (Нужно дописать)
 # echo 'Капирование на удаленный хост'
@@ -151,7 +138,7 @@ done
 #php -f ./send_bk_status.php
 echo -e "\e[32m Бэкап на \e[1m$NOW выполнен\e[0m"
 
-echo -e "\e[34mИзменение владельца папки с бэкапом ($BK_DIR) на :\e[0m "$BK_FILES_OWNER "\n"
+echo -e "\e[34mИзменение владельца папки с бэкапом ($BK_DIR) на:\e[0m "$BK_FILES_OWNER "\n"
 chown -R $BK_FILES_OWNER ./BackUps
 
-# Доделать отпраку почты, если скрипт был вызван из crontab
+# Доделать отправку почты, если скрипт был вызван из crontab
